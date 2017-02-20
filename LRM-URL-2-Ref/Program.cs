@@ -32,6 +32,9 @@ namespace LRM_URL_2_Ref
     using System.Text.RegularExpressions;
     using System.Threading.Tasks;
 
+    using LRM_URL_2_Ref.LRM;
+    using LRM_URL_2_Ref.LRM.Models;
+
     /// <summary>
     /// Main class
     /// </summary>
@@ -45,12 +48,14 @@ namespace LRM_URL_2_Ref
         /// <param name="args">The arguments.</param>
         static void Main(string[] args)
         {
-            if (args.Length != 2)
+            if (args.Length < 2)
             {
                 Console.WriteLine("Missing argument.");
                 return;
             }
 
+
+            // Variables
             string inFileName = args[0];
             string outFilename = args[1];
 
@@ -60,9 +65,28 @@ namespace LRM_URL_2_Ref
             StreamReader streamReader;
             StreamWriter streamWriter;
 
+            List<LRMShop> shops = new List<LRMShop>();
             List<string> urls = new List<string>();
             string inLine;
 
+
+            // List requested shops
+            for (int i = 2; i < args.Length; i++)
+            {
+                int shopId;
+
+                if (int.TryParse(args[i], out shopId))
+                    shops.Add(LRMConst.Shops[shopId]);
+            }
+
+            // Or default to Ivry
+            if (args.Length == 2)
+            {
+                shops.Add(LRMConst.Shops[142]);
+            }
+
+
+            // Get URLs
             try
             {
                 inFileStream = File.OpenRead(inFileName);
@@ -74,6 +98,13 @@ namespace LRM_URL_2_Ref
                 throw;
             }
 
+            while ((inLine = streamReader.ReadLine()) != null)
+            {
+                urls.Add(inLine);
+            }
+
+
+            // Prepare out file
             try
             {
                 File.Delete(outFilename);
@@ -87,29 +118,13 @@ namespace LRM_URL_2_Ref
                 throw;
             }
 
-            while ((inLine = streamReader.ReadLine()) != null)
-            {
-                urls.Add(inLine);
-            }
 
-            IEnumerable<Task<string>> tasks = null;
-            
+            // Crawl
             try
             {
-                Uri baseUrl = new Uri("http://leroymerlin.fr");
+                LRMCrawler crawler = new LRMCrawler(urls, shops);
 
-                CookieContainer cookieContainer = new CookieContainer();
-                cookieContainer.Add(baseUrl, new Cookie("tracking", "\"{\\\"x1\\\":\\\"142_Ivry_sur_Seine\\\",\\\"x11\\\":\\\"21_Vitry_sur_Seine\\\",\\\"x6\\\":\\\"1\\\",\\\"x10\\\":\\\"1\\\",\\\"x9\\\":null}\""));
-                cookieContainer.Add(baseUrl, new Cookie("store", "store=142|dateContext=20170213"));
-
-                HttpClientHandler handler = new HttpClientHandler
-                    { CookieContainer = cookieContainer };
-                HttpClient webClient = new HttpClient(handler);
-
-                tasks = urls.Select(u => ProcessUrlAsync(u, webClient));
-
-                // ReSharper disable once CoVariantArrayConversion
-                Task.WaitAll(tasks.ToArray());
+                crawler.CrawlAsync().Wait();
             }
             catch (Exception ex)
             {
@@ -117,15 +132,23 @@ namespace LRM_URL_2_Ref
                 throw;
             }
 
+
+            // Output result & cleanup
             try
             {
                 // Write header
-                const string CsvHeader = "Url,Reference,Price,Stock";
-                streamWriter.WriteLine(CsvHeader);
+                const string CsvHeaderFixed = "Url;Reference;";
+                string csvHeader = CsvHeaderFixed
+                                   + string.Join(",", shops.Select(CreateShopHeader));
+                streamWriter.WriteLine(csvHeader);
 
-                foreach (var task in tasks)
+                // Write data
+                foreach (var product in LRMProductMgr.Instance.GetProducts())
                 {
-                    streamWriter.WriteLine(task.Result);
+                    string buff = string.Join("\\n", product.Urls) + ";" + product.Reference + ";";
+                    buff += CreateProductVarPropLine(shops, product.ProductVarProps);
+                    
+                    streamWriter.WriteLine(buff);
                 }
 
                 streamWriter.Close();
@@ -139,66 +162,31 @@ namespace LRM_URL_2_Ref
         }
 
         /// <summary>
-        /// Processes the URL.
+        /// Creates the product variable property line.
         /// </summary>
-        /// <param name="url">The URL.</param>
-        /// <param name="client">The client.</param>
-        /// <returns>CSV value</returns>
-        private static async Task<string> ProcessUrlAsync(string url, HttpClient client)
+        /// <param name="shops">The shops.</param>
+        /// <param name="productVarProps">The product variable props.</param>
+        /// <returns>CSV data line</returns>
+        private static string CreateProductVarPropLine(
+            List<LRMShop> shops,
+            Dictionary<LRMShop, LRMProductVarProp> productVarProps)
         {
-            if (!url.Contains("leroymerlin.fr"))
-            {
-                return url + "," + "," + ",";
-            }
-
-            var html = await client.GetStringAsync(url).ConfigureAwait(false);
-
-            string ret = url + "," + ExtractInformationFromHtml(html);
-            Console.WriteLine(ret);
-
-            return ret;
-        }
-
-        /// <summary>
-        /// Extracts the information from HTML.
-        /// </summary>
-        /// <param name="html">The HTML.</param>
-        /// <returns>CSV value</returns>
-        private static string ExtractInformationFromHtml(string html)
-        {
-            // product_id : '68715843',
-            // product_unitprice_ati : '8.0',
-            // <span>126 Unités</span>
-            const string ProductIdRegex = "product_id : '([0-9]+)',";
-            const string PriceRegex = "product_unitprice_ati : '([0-9\\.]+)',";
-            const string InventoryCountRegex = "<span>([0-9]+) Unités</span>";
-
-            Match productIdMatch = Regex.Match(html, ProductIdRegex);
-            Match priceMatch = Regex.Match(html, PriceRegex);
-            Match inventoryCountMatch = Regex.Match(html, InventoryCountRegex);
-
             return string.Join(
-                ",",
-                SafeGetMatch(productIdMatch),
-                SafeGetMatch(priceMatch),
-                SafeGetMatch(inventoryCountMatch));
+                ";",
+                shops.Select(
+                    s => productVarProps[s].Price + ";" + productVarProps[s].Stock));
         }
 
         /// <summary>
-        /// Safes the get match.
+        /// Creates the shop header.
         /// </summary>
-        /// <param name="match">The match.</param>
-        /// <returns>Extracted match</returns>
-        private static string SafeGetMatch(Match match)
+        /// <param name="shopId">The shop identifier.</param>
+        /// <returns>Csv Header</returns>
+        private static string CreateShopHeader(LRMShop shop)
         {
-            try
-            {
-                return match.Groups[1].Value;
-            }
-            catch (Exception)
-            {
-                return string.Empty;
-            }
+            string shopName = shop.Name;
+
+            return shopName + " Price;" + shopName + " Stock";
         }
 
         #endregion
