@@ -25,26 +25,11 @@ namespace LRM_URL_2_Ref.LRM
 
     using LRM_URL_2_Ref.LRM.Models;
 
-    public class LRMConst
+    /// <summary>
+    /// LRM Constant data
+    /// </summary>
+    public static class LRMConst
     {
-        /// <summary>
-        /// The shops
-        /// </summary>
-        public static Dictionary<int, LRMShop> Shops = new Dictionary<int, LRMShop>
-        {
-            { 55, new LRMShop("paris_beaubourg", 55) },
-            { 182, new LRMShop("paris_daumesnil", 182) },
-            { 190, new LRMShop("paris_19_-_rosa_parks", 190) },
-            { 142, new LRMShop("ivry_sur_seine", 142) },
-            { 114, new LRMShop("saint_ouen", 114) },
-            { 21, new LRMShop("vitry_sur_seine", 21) },
-            { 115, new LRMShop("saint_denis__st_denis-la-plaine_", 115) },
-            { 72, new LRMShop("gennevilliers", 72) },
-            { 63, new LRMShop("rosny-sous-bois", 63) },
-            { 161, new LRMShop("rueil_malmaison", 161) }
-        };
-
-        //
         // Product data Regexes
         //   product_id : '68715843',
         //   product_unitprice_ati : '8.0',
@@ -64,5 +49,23 @@ namespace LRM_URL_2_Ref.LRM
         /// The inventory count regex
         /// </summary>
         public const string StockRegex = "<span>([0-9]+) Unités</span>";
+
+        /// <summary>
+        /// The shops
+        /// </summary>
+        public static Dictionary<int, LRMShop> Shops = new Dictionary<int, LRMShop>
+        {
+            { 55, new LRMShop("paris_beaubourg", 55) },
+            { 182, new LRMShop("paris_daumesnil", 182) },
+            { 190, new LRMShop("paris_19_-_rosa_parks", 190) },
+            { 142, new LRMShop("ivry_sur_seine", 142) },
+            { 114, new LRMShop("saint_ouen", 114) },
+            { 21, new LRMShop("vitry_sur_seine", 21) },
+            { 115, new LRMShop("saint_denis__st_denis-la-plaine_", 115) },
+            { 72, new LRMShop("gennevilliers", 72) },
+            { 63, new LRMShop("rosny-sous-bois", 63) },
+            { 161, new LRMShop("rueil_malmaison", 161) },
+            { 22, new LRMShop("bonneuil__bonneuil-sur-marne_", 22) }
+        };
     }
 }
